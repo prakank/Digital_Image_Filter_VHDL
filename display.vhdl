@@ -69,26 +69,35 @@ architecture clock_functioning_architecture of clock_functioning_entity is
     signal temp_sec:unsigned(5 downto 0);
     signal left_value:integer:=0;
     signal edit_mode_value: bit:='0':
-    signal temp_display_mode_hour:bit:='0': 
+    signal temp_display_mode_hour:bit:='1': -- default mode is HH:MM 
     signal dot:bit:='0';
 begin
-    process(clk2)
+    process(clk2,reset)
     begin 
         if(rising_edge(clk2)) then
             dot<=not dot;
+        end if;
+        if(reset='1')then
+            dot <= '0';
         end if;
     end process;
 
     temp_display_mode_hour <= display_mode;
 
-    process(display_mode)
+    process(display_mode,reset)
     begin
         temp_display_mode_hour <= not temp_display_mode_hour;
+        if (reset='1')then
+            temp_display_mode_hour <= '1';
+        end if;
     end process;
 
-    process(edit_mode_input)
+    process(edit_mode_input,reset)
     begin
         edit_mode_value <= not edit_mode_value;
+        if (reset='1')then
+            edit_mode_value <= '0';
+        end if;
     end process;
     
     process(clk1,reset,diplay_mode,left,increment,edit_mode_value)
@@ -205,7 +214,7 @@ begin
     begin
         if(rising_edge(clk))then
             cnt<=cnt+1;
-            if(cnt<=1000000)then
+            if(cnt<=100000)then  -- Refresh period of 4ms is used. So, Digit Period will be 1ms. 
                 if(led_number="11")then
                     led_number<="00";
                 else 
@@ -285,6 +294,7 @@ begin
 
         elsif (led_number="01") then
             anode_on <= "1011";
+            blink <= '1';
             if(final_display_mode='1') then
                 display_digit <= hr2;
             else 
