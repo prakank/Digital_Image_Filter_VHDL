@@ -12,6 +12,11 @@ entity RAM_64Kx8 is
 );
 end RAM_64Kx8;
 
+library IEEE;
+use IEEE.std_logic_1164.ALL;
+use IEEE.NUMERIC_STD.ALL;
+
+
 entity ROM_32x9 is
     port (
     clock : in std_logic;
@@ -21,10 +26,14 @@ entity ROM_32x9 is
     );
 end ROM_32x9;
 
+library IEEE;
+use IEEE.std_logic_1164.ALL;
+use IEEE.NUMERIC_STD.ALL;
+
 entity MAC is
     port (
     clock : in std_logic;
-    control : in std_logic; -- ‘0’ for initializing the sum
+    control : in std_logic; -- â€˜0â€™ for initializing the sum
     data_in1, data_in2 : in std_logic_vector(17 downto 0);
     data_out : out std_logic_vector(17 downto 0)
     );
@@ -67,7 +76,7 @@ begin
     process (clock) begin
     if rising_edge (clock) then -- sum is available after clock edge
     if (control = '0') then -- initialize the sum with the first product
-    sum <= std_logic_vector (product);
+    sum <= std_logic_vector(product);
     else -- add product to the previous sum
     sum <= std_logic_vector (product + signed (sum));
     end if;
@@ -76,6 +85,9 @@ end process;
 end Artix;
 
 ----------------------------------------------------------------CODE----------------------------------------------------------------
+library IEEE;
+use IEEE.std_logic_1164.ALL;
+use IEEE.NUMERIC_STD.ALL;
 
 -- filter entity will perform 9 operations
 entity filter is
@@ -92,7 +104,7 @@ end filter;
 architecture arch_filter of filter is
     signal curr_mat: std_logic_vector(15 downto 0):=centre_x;                -- Assigning curr_mat as centre of 3*3 matrix
     signal index_to_write_in_ram: std_logic_vector(15 downto 0):=centre_x;   -- This is the index of final pixel which I need to write in RAM after performing 9 MAC operations
-    
+
     signal curr_coe: std_logic_vector(4 downto 0);                 -- Will store the index of coefficient matrix and will move according to curr_mat
     signal counter: std_logic_vector(3 downto 0):="0000";          -- For iterating over cells of 3*3 matrix
     signal col: std_logic_vector(15 downto 0):="0000000010100000"; -- For Input Image - Value to jump to move in next row i.e. 160 (Dimension of column)
@@ -112,54 +124,55 @@ begin
         end if;
 
         if(rising_edge(clock)) then
-            case to_integer(counter) is
-                when 0 =>
-                    curr_mat <= curr_mat-col;
-                    curr_mat <= curr_mat-1;
+            -- Case stmt decides which cell to go on and make appropriate changes to current_index of matrix and correlation coefficient
+            case counter is
+                when "0000" =>
+                    curr_mat <= curr_mat-col; -- Will move to the previous row
+                    curr_mat <= curr_mat-1;   -- Will move one cell backwards
                     curr_coe <= curr_coe-col_coe;
                     curr_coe <= curr_coe-1;
                     counter <= counter+1;
                 
-                when 1 =>
+                when "0001" =>
                     curr_mat <= curr_mat+1;
                     curr_coe <= curr_coe+1;
                     counter <= counter+1;
 
-                when 2 =>
+                when "0010" =>
                     curr_mat <= curr_mat+1;
                     curr_coe <= curr_coe+1;
                     counter <= counter+1;
 
-                when 3 =>
+                when "0011" =>
                     curr_mat <= curr_mat+col;
                     curr_mat <= curr_mat-2;
                     curr_coe <= curr_coe+col_coe;
                     curr_coe <= curr_coe-2;
                     counter <= counter+1;
 
-                when 4 =>
+                when "0100" =>
                     curr_mat <= curr_mat+1;
                     curr_coe <= curr_coe+1;
                     counter <= counter+1;
 
-                when 5 =>
+                when "0101" =>
                     curr_mat <= curr_mat+1;
                     curr_coe <= curr_coe+1;
                     counter <= counter+1;
 
-                when 6 =>
+                when "0110" =>
                     curr_mat <= curr_mat+col;
                     curr_mat <= curr_mat-2;
                     curr_coe <= curr_coe+col_coe;
                     curr_coe <= curr_coe-2;
                     counter <= counter+1;
 
-                when 7 =>
+                when "0111" =>
                     curr_mat <= curr_mat+1;
                     curr_coe <= curr_coe+1;
                     counter <= counter+1;
 
-                when 8 =>   
+                when "1000" =>   
                     curr_mat <= curr_mat+1;
                     curr_coe <= curr_coe+1;
                     counter <= counter+1;
@@ -172,44 +185,54 @@ begin
     
     -- curr_mat is basically the curr_index of my 3*3 matrix
     process(curr_mat)begin
-        if(to_integer(counter)<9)then
-            RAM_64Kx8_unit: RAM_64Kx8
+        if("1010">counter)then -- If counter <=9 then I have to carry on MAC operations
+            
+            RAM_64Kx8_unit: RAM_64Kx8  -- Reads input image value from RAM and stores in data_output_mat
                 port map(clock,'1','0',curr_mat,data_mat,data_output_mat);
-            ROM_32x9_unit: ROM_32x9
+            ROM_32x9_unit: ROM_32x9    -- Reads correlation coefficient value from ROM and stores in data_output_coe
                 port map(clock,'1',curr_coe,data_output_coe);
-            MAC_unit1: MAC
+            MAC_unit1: MAC             -- Obtain the product of data_output_mat and data_output_coe 
                 port map(clock,control,"0000000000" & data_output_mat,"000000000" & data_output_coe,final_data);
-            if(to_integer(counter)=1)then
+
+            if(counter="0001")then
                 control <= not control;
-            end if;
+            end if;            
+
         else 
-            index_to_write_in_ram <= curr_mat + "1000000000000000";
+            index_to_write_in_ram <= curr_mat + "1000000000000000"; -- Objective of this is to not trigger this process again, so I am not changing curr_mat
+
             if(data_output_mat(0)='1')then
                 data_output_mat <= "0000000000000000";
             end if;
-            RAM_64Kx8_unit:RAM_64Kx8
+
+            RAM_64Kx8_unit:RAM_64Kx8 -- Writing the obtained product in RAM
                 port map(clock,'0','1',index_to_write_in_ram,data_output_mat(14 to 7),data_mat);
+
         end if;
     end process;
 end arch_filter;
 
+library IEEE;
+use IEEE.std_logic_1164.ALL;
+use IEEE.NUMERIC_STD.ALL;
+
 entity main is 
     port(
-        push_button: in std_logic;
-        switch: in std_logic;
+        push_button: in std_logic; -- Input button to decide when to start filtering process
+        switch: in std_logic;   
         clock: in std_logic
     );
 end main;
 
-architecture arch of main is
-    signal i: std_logic_vector(17 downto 0):="000000000000000001"; -- for Row traversal
-    signal j: std_logic_vector(17 downto 0):="000000000000000001"; -- for Column traversal
-    signal row_bound: std_logic_vector(17 downto 0):="000000000001110111"; -- if i==row_bound, I have to stop the process i.e. I have completely iterated over my input image     
-    signal column_bound: std_logic_vector(17 downto 0):="000000000010011111"; -- if j==column_bound, I will increment i by 1
-    signal row: std_logic_vector(17 downto 0):="000000000001111000"; 
-    signal column: std_logic_vector(17 downto 0):="000000000010100000"; 
-    signal curr_index: std_logic_vector(17 downto 0):="000000000000000000";
-    signal curr_index_15dt0: std_logic_vector(15 downto 0):="0000000000000000";    
+architecture arch of main is  
+    signal i: std_logic_vector(17 downto 0):="000000000000000001";              -- for Row traversal
+    signal j: std_logic_vector(17 downto 0):="000000000000000001";              -- for Column traversal
+    signal row_bound: std_logic_vector(17 downto 0):="000000000001110111";      -- if i==row_bound, I have to stop the process i.e. I have completely iterated over my input image     
+    signal column_bound: std_logic_vector(17 downto 0):="000000000010011111";   -- if j==column_bound, I will increment i by 1
+    signal row: std_logic_vector(17 downto 0):="000000000001111000";            -- Total Number of rows of input image i.e. 120
+    signal column: std_logic_vector(17 downto 0):="000000000010100000";         -- Total Number of columns of input image i.e. 160
+    signal curr_index: std_logic_vector(17 downto 0):="000000000000000000";     -- Current index to be obtained through current_row*160 + current_column, current column will be added while obtaining curr_index_15dt0
+    signal curr_index_15dt0: std_logic_vector(15 downto 0):="0000000000000000"; -- Trim the first 2 bits of curr_index and add column number    
     -- row_bound = 119
     -- column_bound = 159
     signal start: std_logic:='0';
@@ -230,8 +253,7 @@ begin
                 port map(clock,'0',i,row,curr_index); -- i is data_in1, row is data_in2
             -- MAC_unit0 will provide me with the required index without adding the current column no.
 
-            curr_index_15dt0 <= curr_index(15 to 0) + j;
-            
+            curr_index_15dt0 <= curr_index(15 to 0) + j;            
             --curr_index_15dt0 is the current index of centre of my 3*3 matrix in input image
 
             filter_unit:filter
@@ -245,4 +267,3 @@ begin
         end if;
     end process;
 end architecture;
-
