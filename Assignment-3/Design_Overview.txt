@@ -1,0 +1,44 @@
+Prakhar Aggarwal
+2019CS50441
+
+RAM_64Kx8 is for reading and writing pixel values
+ROM_32x9 is for reading values of correlation coefficient
+MAC is for multiplying and adding 2 numbers
+
+Filter Entity
+Input : takes switch, clock, centre_x
+        If switch = 1, then I will use smoothening filter or the filter stored from 0 onwards
+        If switch = 2, then I will use sharpening filter or the filter stored from 16 onwards
+        centre_x stores the index of current pixel or the address of centre pixel of the 3*3 matrix
+
+Signal: Stores number of rows, columns, current_index_of_matrix, current_index_of_correlation_coefficient_matrix.
+        Output obtained through RAM, ROM, MAC entites are also stored.
+        Control determines whether I have to initaialize sum or continue to add in earlier ones.
+
+Functioning: Architecture of filter is responsible for carrying out 9 MAC operations and writing the value in RAM after completing the 9 operations.
+             Using the centre pixel value, I start from the top leftmost corner of current 3*3 matrix and iterate over the matrix. 
+             Address of different cells is obtained by suitably subtracting number of columns or adding them and suitably adding a number to reach that cell.
+             Each statement inside case counter contains how different cell values are obtained.
+             When counter = 10, this means we have iterated over the matrix and now need to write the value in RAM i.e. making write_enable to be 1.
+    
+Main Entity
+Input: push_button -> decides when to start i.e. it makes start = '1'
+                      After the process is over, start will become '0' and will wait for next input from user or will wait for push_button to be presses again. 
+       Switch decides which filter to be applied, sharpening or smoothening. 
+
+Signal: Stores current row, column, total number of rowsa and columns. 
+        Row_bound, column_bound keeps check of when to move to the next row and when my image filtering process is over. 
+        curr_index is obtained through one MAC operations.
+        curr_index_15dt0 appropraitely converts the 18 bit number into 16 bit number. 
+
+Functioning: Architecture of main iterates over the input image and instantiate filter entity which will further do all the necessay MAC operations of reading, multiplying and writing.
+             If a row is completley checked, I move over to the next row make my column_number to be 1 and again repeat the process. 
+             On completion of rows i.e. checking all the valid cells, start is assigned 0 and my model will wait for user to again press the push_button.
+             If during the functioning of model if push_button is pressed and execution is not complete, model will stop working because value of start will become 0.              
+
+My design has 5 different states written in ASM chart.
+1st state -> S0 -> Ideal state i.e. it is in rest state
+2nd state -> S1 -> push_button is pressed and switch is 0 i.e. I am continuing with smoothening filter
+3rd state -> S2 -> push_button is pressed and switch is 1 i.e. I am continuing with sharpening filter
+4th state -> S3 -> If counter becomes 10, I will write value in RAM and move to next cell (if existing). Once completley visited all valid cells, done will become 1 and I will come back to ideal state
+5th state -> S4 -> Similar functioning as of 4th state or S3.
